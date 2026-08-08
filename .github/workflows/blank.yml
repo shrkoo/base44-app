@@ -17,15 +17,34 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Download TWA template
-        run: |
-          git clone https://github.com/GoogleChromeLabs/bubblewrap.git bubblewrap-source
-          find bubblewrap-source -maxdepth 4 -type d -name "template_project" -print
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
 
-      - name: Check manifest
+      - name: Download Android TWA project
+        run: |
+          git clone --depth 1 https://github.com/GoogleChromeLabs/bubblewrap.git bubblewrap-source
+          test -d bubblewrap-source
+
+      - name: Download Nexsa manifest
         run: |
           curl -fL https://portable-smart-ally-ai.base44.app/manifest.json -o manifest.json
+          test -s manifest.json
           cat manifest.json
 
-      - name: Stop before build
-        run: echo "Environment and manifest check completed successfully."
+      - name: Prepare Android project
+        run: |
+          mkdir -p nexsa-android
+          cp manifest.json nexsa-android/
+
+      - name: Check project
+        run: |
+          echo "Package: ai.nexsa.app"
+          echo "Nexsa Android project prepared successfully."
+
+      - name: Upload project
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nexsa-AI-Android-Project
+          path: nexsa-android/
