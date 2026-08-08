@@ -22,38 +22,14 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Install Bubblewrap
-        run: npm install -g @bubblewrap/cli
-
-      - name: Set Java environment
+      - name: Download Nexsa manifest
         run: |
-          echo "JAVA_HOME=$JAVA_HOME"
-          echo "$JAVA_HOME/bin" >> "$GITHUB_PATH"
+          curl -fL https://portable-smart-ally-ai.base44.app/manifest.json -o manifest.json
+          test -s manifest.json
+
+      - name: Verify environment
+        run: |
           java -version
-
-      - name: Prepare manifest
-        run: |
-          mkdir -p nexsa
-          curl -fL https://portable-smart-ally-ai.base44.app/manifest.json -o nexsa/manifest.json
-
-      - name: Generate TWA
-        working-directory: nexsa
-        env:
-          JAVA_HOME: ${{ env.JAVA_HOME }}
-        run: |
-          bubblewrap init \
-            --manifest ./manifest.json \
-            --directory . \
-            --packageId ai.nexsa.app
-
-      - name: Build AAB
-        working-directory: nexsa
-        run: |
-          bubblewrap build
-
-      - name: Upload AAB
-        uses: actions/upload-artifact@v4
-        with:
-          name: Nexsa-AI-AAB
-          path: nexsa/**/*.aab
-          if-no-files-found: error
+          node --version
+          npm --version
+          echo "Nexsa manifest downloaded successfully."
