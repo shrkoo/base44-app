@@ -22,29 +22,38 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Download Android TWA project
-        run: |
-          git clone --depth 1 https://github.com/GoogleChromeLabs/bubblewrap.git bubblewrap-source
-          test -d bubblewrap-source
+      - name: Install Bubblewrap
+        run: npm install -g @bubblewrap/cli
 
-      - name: Download Nexsa manifest
+      - name: Prepare Bubblewrap
         run: |
-          curl -fL https://portable-smart-ally-ai.base44.app/manifest.json -o manifest.json
-          test -s manifest.json
-          cat manifest.json
+          mkdir -p nexsa
+          curl -fL https://portable-smart-ally-ai.base44.app/manifest.json -o nexsa/manifest.json
 
-      - name: Prepare Android project
+      - name: Generate TWA project
+        working-directory: nexsa
         run: |
-          mkdir -p nexsa-android
-          cp manifest.json nexsa-android/
+          bubblewrap init \
+            --manifest ./manifest.json \
+            --directory . \
+            --packageId ai.nexsa.app \
+            --appName "Nexsa AI" \
+            --launcherName "Nexsa AI" \
+            --displayMode standalone \
+            --startUrl "https://portable-smart-ally-ai.base44.app"
 
-      - name: Check project
+      - name: Build AAB
+        working-directory: nexsa
         run: |
-          echo "Package: ai.nexsa.app"
-          echo "Nexsa Android project prepared successfully."
+          bubblewrap build --skipPwaValidation
 
-      - name: Upload project
+      - name: Find AAB
+        run: |
+          find nexsa -type f -name "*.aab" -print
+
+      - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
-          name: Nexsa-AI-Android-Project
-          path: nexsa-android/
+          name: Nexsa-AI-AAB
+          path: nexsa/**/*.aab
+          if-no-files-found: error
