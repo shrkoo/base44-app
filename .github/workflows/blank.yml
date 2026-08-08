@@ -17,19 +17,31 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Setup Node.js 22
-        uses: actions/setup-node@v5
-        with:
-          node-version: "22"
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Download Nexsa manifest
+      - name: Download Gradle 8.9
         run: |
-          curl -fL https://portable-smart-ally-ai.base44.app/manifest.json -o manifest.json
-          test -s manifest.json
+          curl -fL https://services.gradle.org/distributions/gradle-8.9-bin.zip -o gradle.zip
+          unzip -q gradle.zip
+          echo "$PWD/gradle-8.9/bin" >> "$GITHUB_PATH"
 
-      - name: Verify environment
+      - name: Check Gradle
         run: |
+          gradle --version
           java -version
-          node --version
-          npm --version
-          echo "Nexsa manifest downloaded successfully."
+
+      - name: Build AAB
+        run: |
+          gradle bundleRelease --no-daemon
+
+      - name: Find AAB
+        run: |
+          find . -type f -name "*.aab" -print
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nexsa-AI-AAB
+          path: "**/*.aab"
+          if-no-files-found: error
