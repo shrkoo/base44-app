@@ -1,4 +1,4 @@
-name: Build Nexsa AI
+name: Build Nexsa AI Android
 
 on:
   workflow_dispatch:
@@ -11,32 +11,40 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check PWA manifest
-        run: |
-          curl -fL https://portable-smart-ally-ai.base44.app/manifest.json -o manifest.json
-          cat manifest.json
-
-      - name: Check manifest
-        run: |
-          python3 - <<'PY'
-          import json
-
-          with open("manifest.json", encoding="utf-8") as f:
-              manifest = json.load(f)
-
-          print("App name:", manifest.get("name"))
-          print("Start URL:", manifest.get("start_url"))
-          print("Display:", manifest.get("display"))
-          print("Icons:", len(manifest.get("icons", [])))
-          PY
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
       - name: Install Bubblewrap
         run: npm install -g @bubblewrap/cli
 
-      - name: Show Bubblewrap version
-        run: bubblewrap --version
+      - name: Create Android project
+        run: |
+          mkdir nexsa
+          cd nexsa
+          yes "" | bubblewrap init \
+            --manifest https://portable-smart-ally-ai.base44.app/manifest.json
+
+      - name: Build AAB
+        working-directory: nexsa
+        run: |
+          yes "" | bubblewrap build
+
+      - name: Find Android files
+        run: |
+          find . -type f \( -name "*.aab" -o -name "*.apk" \)
+
+      - name: Upload AAB and APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nexsa-AI-Android
+          path: |
+            **/*.aab
+            **/*.apk
