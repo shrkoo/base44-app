@@ -25,31 +25,31 @@ jobs:
       - name: Install Bubblewrap
         run: npm install -g @bubblewrap/cli
 
-      - name: Prepare Bubblewrap
+      - name: Set Java environment
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME"
+          echo "$JAVA_HOME/bin" >> "$GITHUB_PATH"
+          java -version
+
+      - name: Prepare manifest
         run: |
           mkdir -p nexsa
           curl -fL https://portable-smart-ally-ai.base44.app/manifest.json -o nexsa/manifest.json
 
-      - name: Generate TWA project
+      - name: Generate TWA
         working-directory: nexsa
+        env:
+          JAVA_HOME: ${{ env.JAVA_HOME }}
         run: |
           bubblewrap init \
             --manifest ./manifest.json \
             --directory . \
-            --packageId ai.nexsa.app \
-            --appName "Nexsa AI" \
-            --launcherName "Nexsa AI" \
-            --displayMode standalone \
-            --startUrl "https://portable-smart-ally-ai.base44.app"
+            --packageId ai.nexsa.app
 
       - name: Build AAB
         working-directory: nexsa
         run: |
-          bubblewrap build --skipPwaValidation
-
-      - name: Find AAB
-        run: |
-          find nexsa -type f -name "*.aab" -print
+          bubblewrap build
 
       - name: Upload AAB
         uses: actions/upload-artifact@v4
