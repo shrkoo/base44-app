@@ -1,10 +1,10 @@
-name: Build Nexsa AI
+name: Build Nexsa AI Android
 
 on:
   workflow_dispatch:
 
 jobs:
-  check:
+  build:
     runs-on: ubuntu-latest
 
     steps:
@@ -12,30 +12,21 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "22"
 
       - name: Setup Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
-          distribution: "temurin"
+          distribution: temurin
           java-version: "17"
 
       - name: Install Bubblewrap
         run: npm install -g @bubblewrap/cli
 
-      - name: Check Java
-        run: java -version
-
-      - name: Check Node
-        run: node --version
-
-      - name: Check npm
-        run: npm --version
-
-      - name: Check Bubblewrap
+      - name: Show Bubblewrap version
         run: bubblewrap --version
 
       - name: Show Bubblewrap help
-        run: bubblewrap --help
+        run: bubblewrap help
