@@ -7,12 +7,15 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      CI: true
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v4
         with:
           node-version: "22"
 
@@ -22,11 +25,33 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Verify Java
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME"
+          java -version
+          javac -version
+
       - name: Install Bubblewrap
         run: npm install -g @bubblewrap/cli
 
-      - name: Show Bubblewrap version
-        run: bubblewrap --version
+      - name: Initialize Bubblewrap
+        run: |
+          yes | bubblewrap init \
+            --manifest https://portable-smart-ally-ai.base44.app/manifest.json
 
-      - name: Show Bubblewrap help
-        run: bubblewrap help
+      - name: Build Android
+        run: |
+          yes | bubblewrap build
+
+      - name: Find APK and AAB
+        run: |
+          find . -type f \( -name "*.apk" -o -name "*.aab" \) -print
+
+      - name: Upload Android files
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nexsa-AI-Android
+          path: |
+            **/*.apk
+            **/*.aab
+          if-no-files-found: error
