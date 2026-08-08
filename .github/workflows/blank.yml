@@ -22,15 +22,15 @@ jobs:
           import json
 
           with open("manifest.json", encoding="utf-8") as f:
-              m = json.load(f)
+              manifest = json.load(f)
 
-          print("App name:", m.get("name"))
-          print("Start URL:", m.get("start_url"))
-          print("Display:", m.get("display"))
-          print("Icons:", len(m.get("icons", [])))
+          print("App name:", manifest.get("name"))
+          print("Start URL:", manifest.get("start_url"))
+          print("Display:", manifest.get("display"))
+          print("Icons:", len(manifest.get("icons", [])))
           PY
 
-      - name: Install Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
