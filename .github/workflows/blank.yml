@@ -23,17 +23,42 @@ jobs:
       - name: Install Android SDK
         run: |
           yes | sdkmanager --licenses || true
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
       - name: Install Gradle 8.9
         run: |
-          curl -fL https://services.gradle.org/distributions/gradle-8.9-bin.zip -o gradle.zip
+          curl -fL \
+            https://services.gradle.org/distributions/gradle-8.9-bin.zip \
+            -o gradle.zip
           unzip -q gradle.zip
           echo "$PWD/gradle-8.9/bin" >> "$GITHUB_PATH"
 
-      - name: Create Nexsa Android project
+      - name: Restore permanent signing key
+        env:
+          NEXSA_KEYSTORE_BASE64: ${{ secrets.NEXSA_KEYSTORE_BASE64 }}
         run: |
-          rm -rf nexsa-build
+          set -e
+
+          test -n "$NEXSA_KEYSTORE_BASE64"
+
+          mkdir -p nexsa-build
+
+          printf '%s' "$NEXSA_KEYSTORE_BASE64" \
+            | base64 --decode > nexsa-build/nexsa-release.jks
+
+          test -s nexsa-build/nexsa-release.jks
+
+          echo "Permanent keystore restored."
+
+      - name: Create Nexsa Android project
+        env:
+          NEXSA_STORE_PASSWORD: ${{ secrets.NEXSA_STORE_PASSWORD }}
+          NEXSA_KEY_PASSWORD: ${{ secrets.NEXSA_KEY_PASSWORD }}
+        run: |
+          set -e
 
           mkdir -p nexsa-build/app/src/main/java/ai/nexsa/app
           mkdir -p nexsa-build/app/src/main/res/values
@@ -76,6 +101,15 @@ jobs:
               id 'com.android.application'
           }
 
+          def storePassword = System.getenv("NEXSA_STORE_PASSWORD")
+          def keyPassword = System.getenv("NEXSA_KEY_PASSWORD")
+
+          if (!storePassword || !keyPassword) {
+              throw new GradleException(
+                  "Nexsa signing secrets are missing."
+              )
+          }
+
           android {
               namespace 'ai.nexsa.app'
               compileSdk 35
@@ -84,37 +118,26 @@ jobs:
                   applicationId 'ai.nexsa.app'
                   minSdk 23
                   targetSdk 35
-                  versionCode 1
-                  versionName '1.0.0'
+                  versionCode 18
+                  versionName '1.0.18'
               }
 
               signingConfigs {
                   release {
                       storeFile file("../nexsa-release.jks")
-                      storePassword "NexsaStore123!"
+                      storePassword storePassword
                       keyAlias "nexsa"
-                      keyPassword "NexsaKey123!"
+                      keyPassword keyPassword
                   }
               }
 
               buildTypes {
                   release {
                       minifyEnabled false
+                      shrinkResources false
                       signingConfig signingConfigs.release
                   }
               }
-          }
-
-          configurations.configureEach {
-              resolutionStrategy {
-                  force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
-                  force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'
-                  force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
-              }
-          }
-
-          dependencies {
-              implementation 'androidx.activity:activity:1.9.3'
           }
           EOF
 
@@ -149,14 +172,18 @@ jobs:
           cat > nexsa-build/app/src/main/res/values/styles.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
+
               <style
                   name="Theme.Nexsa"
                   parent="android:style/Theme.Material.Light.NoActionBar">
+
                   <item name="android:fontFamily">sans</item>
                   <item name="android:colorAccent">#14B8A6</item>
                   <item name="android:navigationBarColor">#000000</item>
                   <item name="android:statusBarColor">#000000</item>
+
               </style>
+
           </resources>
           EOF
 
@@ -205,47 +232,89 @@ jobs:
           }
           EOF
 
-      - name: Create signing key
+      - name: Verify permanent signing key
         working-directory: nexsa-build
+        env:
+          NEXSA_STORE_PASSWORD: ${{ secrets.NEXSA_STORE_PASSWORD }}
         run: |
-          keytool -genkeypair \
-            -v \
-            -keystore nexsa-release.jks \
-            -storetype JKS \
-            -alias nexsa \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass 'NexsaStore123!' \
-            -keypass 'NexsaKey123!' \
-            -dname "CN=Nexsa AI, OU=Nexsa, O=Nexsa, L=Iran, ST=West Azerbaijan, C=IR"
+          set -e
 
-      - name: Build APK
+          keytool -list \
+            -keystore nexsa-release.jks \
+            -storepass "$NEXSA_STORE_PASSWORD" \
+            -alias nexsa
+
+          echo "Signing key verified."
+
+      - name: Build signed APK
         working-directory: nexsa-build
         run: |
+          set -e
           gradle assembleRelease --no-daemon
 
-      - name: Build AAB
+      - name: Build signed AAB
         working-directory: nexsa-build
         run: |
+          set -e
           gradle bundleRelease --no-daemon
 
-      - name: Prepare outputs
+      - name: Find apksigner
         run: |
+          set -e
+
+          APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+
+          if [ ! -x "$APKSIGNER" ]; then
+            echo "apksigner not found."
+            find "$ANDROID_HOME/build-tools" \
+              -name apksigner \
+              -type f \
+              -print
+            exit 1
+          fi
+
+          echo "APKSIGNER=$APKSIGNER" >> "$GITHUB_ENV"
+
+      - name: Verify APK signature
+        working-directory: nexsa-build
+        run: |
+          set -e
+
+          "$APKSIGNER" verify --verbose \
+            app/build/outputs/apk/release/app-release.apk
+
+          echo "APK signature OK."
+
+      - name: Verify AAB signature
+        working-directory: nexsa-build
+        run: |
+          set -e
+
+          jarsigner -verify -verbose -certs \
+            app/build/outputs/bundle/release/app-release.aab
+
+          echo "AAB signature OK."
+
+      - name: Prepare release files
+        run: |
+          set -e
+
+          rm -rf outputs
           mkdir -p outputs
 
-          cp nexsa-build/app/build/outputs/apk/release/app-release.apk \
+          cp \
+            nexsa-build/app/build/outputs/apk/release/app-release.apk \
             outputs/Nexsa-AI-v18.apk
 
-          cp nexsa-build/app/build/outputs/bundle/release/app-release.aab \
+          cp \
+            nexsa-build/app/build/outputs/bundle/release/app-release.aab \
             outputs/Nexsa-AI-v18.aab
 
-          echo "Files created:"
           ls -lh outputs/
 
       - name: Upload APK and AAB
         uses: actions/upload-artifact@v4
         with:
-          name: Nexsa-AI-v18
+          name: Nexsa-AI-v18-release
           path: outputs/
           if-no-files-found: error
