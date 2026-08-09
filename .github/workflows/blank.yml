@@ -1,4 +1,4 @@
-name: Build Nexsa AI Android v17
+name: Build Nexsa AI Android v18
 
 on:
   workflow_dispatch:
@@ -23,16 +23,11 @@ jobs:
       - name: Install Android SDK
         run: |
           yes | sdkmanager --licenses || true
-          sdkmanager \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Install Gradle 8.9
         run: |
-          curl -fL \
-            https://services.gradle.org/distributions/gradle-8.9-bin.zip \
-            -o gradle.zip
+          curl -fL https://services.gradle.org/distributions/gradle-8.9-bin.zip -o gradle.zip
           unzip -q gradle.zip
           echo "$PWD/gradle-8.9/bin" >> "$GITHUB_PATH"
 
@@ -124,148 +119,4 @@ jobs:
           EOF
 
           cat > nexsa-build/app/src/main/AndroidManifest.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
-              <uses-permission android:name="android.permission.INTERNET" />
-
-              <application
-                  android:allowBackup="true"
-                  android:label="Nexsa AI"
-                  android:supportsRtl="true"
-                  android:theme="@style/Theme.Nexsa">
-
-                  <activity
-                      android:name=".MainActivity"
-                      android:exported="true">
-
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-
-                  </activity>
-
-              </application>
-
-          </manifest>
-          EOF
-
-          cat > nexsa-build/app/src/main/res/values/styles.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <style
-                  name="Theme.Nexsa"
-                  parent="android:style/Theme.Material.Light.NoActionBar">
-                  <item name="android:fontFamily">sans</item>
-                  <item name="android:colorAccent">#14B8A6</item>
-                  <item name="android:navigationBarColor">#000000</item>
-                  <item name="android:statusBarColor">#000000</item>
-              </style>
-          </resources>
-          EOF
-
-          cat > nexsa-build/app/src/main/java/ai/nexsa/app/MainActivity.java <<'EOF'
-          package ai.nexsa.app;
-
-          import android.app.Activity;
-          import android.os.Bundle;
-          import android.webkit.WebSettings;
-          import android.webkit.WebView;
-          import android.webkit.WebViewClient;
-
-          public class MainActivity extends Activity {
-
-              private WebView webView;
-
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-
-                  webView = new WebView(this);
-
-                  WebSettings settings = webView.getSettings();
-                  settings.setJavaScriptEnabled(true);
-                  settings.setDomStorageEnabled(true);
-                  settings.setAllowFileAccess(true);
-                  settings.setAllowContentAccess(true);
-
-                  webView.setWebViewClient(new WebViewClient());
-
-                  webView.loadUrl(
-                      "https://portable-smart-ally-ai.base44.app"
-                  );
-
-                  setContentView(webView);
-              }
-
-              @Override
-              public void onBackPressed() {
-                  if (webView.canGoBack()) {
-                      webView.goBack();
-                  } else {
-                      super.onBackPressed();
-                  }
-              }
-          }
-          EOF
-
-      - name: Create signing key
-        working-directory: nexsa-build
-        run: |
-          keytool -genkeypair \
-            -v \
-            -keystore nexsa-release.jks \
-            -storetype JKS \
-            -alias nexsa \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass 'NexsaStore123!' \
-            -keypass 'NexsaKey123!' \
-            -dname "CN=Nexsa AI, OU=Nexsa, O=Nexsa, L=Iran, ST=West Azerbaijan, C=IR"
-
-      - name: Verify project
-        working-directory: nexsa-build
-        run: |
-          test -f settings.gradle
-          test -f build.gradle
-          test -f app/build.gradle
-          test -f app/src/main/AndroidManifest.xml
-          test -f app/src/main/java/ai/nexsa/app/MainActivity.java
-          test -f nexsa-release.jks
-
-          echo "Nexsa project and signing key are ready."
-
-      - name: Build signed AAB
-        working-directory: nexsa-build
-        run: |
-          gradle bundleRelease --no-daemon
-
-      - name: Build signed APK
-        working-directory: nexsa-build
-        run: |
-          gradle assembleRelease --no-daemon
-
-      - name: Verify APK signature
-        working-directory: nexsa-build
-        run: |
-          apksigner verify --verbose \
-            app/build/outputs/apk/release/app-release.apk
-
-      - name: Rename outputs
-        run: |
-          cp nexsa-build/app/build/outputs/apk/release/app-release.apk \
-             nexsa-build/Nexsa-AI-v17.apk
-
-          cp nexsa-build/app/build/outputs/bundle/release/app-release.aab \
-             nexsa-build/Nexsa-AI-v17.aab
-
-      - name: Upload signed APK and AAB
-        uses: actions/upload-artifact@v4
-        with:
-          name: Nexsa-AI-Android-v17-SIGNED
-          path: |
-            nexsa-build/Nexsa-AI-v17.apk
-            nexsa-build/Nexsa-AI-v17.aab
-          if-no-files-found: error
+          <?xml
