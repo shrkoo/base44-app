@@ -119,4 +119,133 @@ jobs:
           EOF
 
           cat > nexsa-build/app/src/main/AndroidManifest.xml <<'EOF'
-          <?xml
+          <?xml          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.INTERNET" />
+
+              <application
+                  android:allowBackup="true"
+                  android:label="Nexsa AI"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.Nexsa">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+
+                  </activity>
+
+              </application>
+
+          </manifest>
+          EOF
+
+          cat > nexsa-build/app/src/main/res/values/styles.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style
+                  name="Theme.Nexsa"
+                  parent="android:style/Theme.Material.Light.NoActionBar">
+                  <item name="android:fontFamily">sans</item>
+                  <item name="android:colorAccent">#14B8A6</item>
+                  <item name="android:navigationBarColor">#000000</item>
+                  <item name="android:statusBarColor">#000000</item>
+              </style>
+          </resources>
+          EOF
+
+          cat > nexsa-build/app/src/main/java/ai/nexsa/app/MainActivity.java <<'EOF'
+          package ai.nexsa.app;
+
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+
+          public class MainActivity extends Activity {
+
+              private WebView webView;
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+
+                  webView = new WebView(this);
+
+                  WebSettings settings = webView.getSettings();
+                  settings.setJavaScriptEnabled(true);
+                  settings.setDomStorageEnabled(true);
+                  settings.setAllowFileAccess(true);
+                  settings.setAllowContentAccess(true);
+
+                  webView.setWebViewClient(new WebViewClient());
+
+                  webView.loadUrl(
+                      "https://portable-smart-ally-ai.base44.app"
+                  );
+
+                  setContentView(webView);
+              }
+
+              @Override
+              public void onBackPressed() {
+                  if (webView.canGoBack()) {
+                      webView.goBack();
+                  } else {
+                      super.onBackPressed();
+                  }
+              }
+          }
+          EOF
+
+      - name: Create signing key
+        working-directory: nexsa-build
+        run: |
+          keytool -genkeypair \
+            -v \
+            -keystore nexsa-release.jks \
+            -storetype JKS \
+            -alias nexsa \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass 'NexsaStore123!' \
+            -keypass 'NexsaKey123!' \
+            -dname "CN=Nexsa AI, OU=Nexsa, O=Nexsa, L=Iran, ST=West Azerbaijan, C=IR"
+
+      - name: Build APK
+        working-directory: nexsa-build
+        run: |
+          gradle assembleRelease --no-daemon
+
+      - name: Build AAB
+        working-directory: nexsa-build
+        run: |
+          gradle bundleRelease --no-daemon
+
+      - name: Prepare outputs
+        run: |
+          mkdir -p outputs
+
+          cp nexsa-build/app/build/outputs/apk/release/app-release.apk \
+            outputs/Nexsa-AI-v18.apk
+
+          cp nexsa-build/app/build/outputs/bundle/release/app-release.aab \
+            outputs/Nexsa-AI-v18.aab
+
+          echo "Files created:"
+          ls -lh outputs/
+
+      - name: Upload APK and AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nexsa-AI-v18
+          path: outputs/
+          if-no-files-found: error
