@@ -1,4 +1,4 @@
-name: Build Nexsa AI Android
+name: Build Nexsa AI Android v17
 
 on:
   workflow_dispatch:
@@ -33,9 +33,7 @@ jobs:
           curl -fL \
             https://services.gradle.org/distributions/gradle-8.9-bin.zip \
             -o gradle.zip
-
           unzip -q gradle.zip
-
           echo "$PWD/gradle-8.9/bin" >> "$GITHUB_PATH"
 
       - name: Create Nexsa Android project
@@ -95,13 +93,137 @@ jobs:
                   versionName '1.0.0'
               }
 
+              signingConfigs {
+                  release {
+                      storeFile file("../nexsa-release.jks")
+                      storePassword "NexsaStore123!"
+                      keyAlias "nexsa"
+                      keyPassword "NexsaKey123!"
+                  }
+              }
+
               buildTypes {
                   release {
                       minifyEnabled false
+                      signingConfig signingConfigs.release
                   }
               }
           }
 
+          configurations.configureEach {
+              resolutionStrategy {
+                  force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+                  force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'
+                  force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.activity:activity:1.9.3'
+          }
+          EOF
+
+          cat > nexsa-build/app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.INTERNET" />
+
+              <application
+                  android:allowBackup="true"
+                  android:label="Nexsa AI"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.Nexsa">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+
+                  </activity>
+
+              </application>
+
+          </manifest>
+          EOF
+
+          cat > nexsa-build/app/src/main/res/values/styles.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style
+                  name="Theme.Nexsa"
+                  parent="android:style/Theme.Material.Light.NoActionBar">
+                  <item name="android:fontFamily">sans</item>
+                  <item name="android:colorAccent">#14B8A6</item>
+                  <item name="android:navigationBarColor">#000000</item>
+                  <item name="android:statusBarColor">#000000</item>
+              </style>
+          </resources>
+          EOF
+
+          cat > nexsa-build/app/src/main/java/ai/nexsa/app/MainActivity.java <<'EOF'
+          package ai.nexsa.app;
+
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+
+          public class MainActivity extends Activity {
+
+              private WebView webView;
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+
+                  webView = new WebView(this);
+
+                  WebSettings settings = webView.getSettings();
+                  settings.setJavaScriptEnabled(true);
+                  settings.setDomStorageEnabled(true);
+                  settings.setAllowFileAccess(true);
+                  settings.setAllowContentAccess(true);
+
+                  webView.setWebViewClient(new WebViewClient());
+
+                  webView.loadUrl(
+                      "https://portable-smart-ally-ai.base44.app"
+                  );
+
+                  setContentView(webView);
+              }
+
+              @Override
+              public void onBackPressed() {
+                  if (webView.canGoBack()) {
+                      webView.goBack();
+                  } else {
+                      super.onBackPressed();
+                  }
+              }
+          }
+          EOF
+
+      - name: Create signing key
+        working-directory: nexsa-build
+        run: |
+          keytool -genkeypair \
+            -v \
+            -keystore nexsa-release.jks \
+            -storetype JKS \
+            -alias nexsa \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass 'NexsaStore123!' \
+            -keypass 'NexsaKey123!' \
+            -dname "CN=Nexsa AI, OU=Nexsa, O=Nexsa, L=Iran, ST=West
           configurations.configureEach {
               resolutionStrategy {
                   force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
