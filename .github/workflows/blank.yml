@@ -30,7 +30,7 @@ jobs:
 
       - name: Install Gradle 8.9
         run: |
-          curl -L \
+          curl -fL \
             https://services.gradle.org/distributions/gradle-8.9-bin.zip \
             -o gradle.zip
 
@@ -38,7 +38,7 @@ jobs:
 
           echo "$PWD/gradle-8.9/bin" >> "$GITHUB_PATH"
 
-      - name: Create Android project
+      - name: Create Nexsa Android project
         run: |
           rm -rf nexsa-build
 
@@ -75,6 +75,7 @@ jobs:
           cat > nexsa-build/gradle.properties <<'EOF'
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           android.useAndroidX=true
+          android.nonTransitiveRClass=true
           EOF
 
           cat > nexsa-build/app/build.gradle <<'EOF'
@@ -101,8 +102,16 @@ jobs:
               }
           }
 
+          configurations.configureEach {
+              resolutionStrategy {
+                  force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+                  force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'
+                  force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
+              }
+          }
+
           dependencies {
-              implementation 'androidx.appcompat:appcompat:1.7.0'
+              implementation 'androidx.activity:activity:1.9.3'
           }
           EOF
 
@@ -198,17 +207,18 @@ jobs:
           }
           EOF
 
-      - name: Verify project
+      - name: Verify Android project
         working-directory: nexsa-build
         run: |
-          echo "Checking Android project..."
           test -f settings.gradle
           test -f build.gradle
+          test -f gradle.properties
           test -f app/build.gradle
           test -f app/src/main/AndroidManifest.xml
           test -f app/src/main/java/ai/nexsa/app/MainActivity.java
           test -f app/src/main/res/values/styles.xml
-          echo "Project structure OK"
+
+          echo "Nexsa Android project structure is OK."
 
       - name: Build AAB
         working-directory: nexsa-build
@@ -220,18 +230,24 @@ jobs:
         run: |
           gradle assembleRelease --no-daemon
 
-      - name: Show outputs
+      - name: Find generated files
         run: |
-          echo "=== AAB ==="
-          find nexsa-build/app/build/outputs/bundle -type f -name "*.aab" -print
+          echo "===== AAB ====="
+          find nexsa-build/app/build/outputs/bundle \
+            -type f \
+            -name "*.aab" \
+            -print
 
-          echo "=== APK ==="
-          find nexsa-build/app/build/outputs/apk -type f -name "*.apk" -print
+          echo "===== APK ====="
+          find nexsa-build/app/build/outputs/apk \
+            -type f \
+            -name "*.apk" \
+            -print
 
       - name: Upload APK and AAB
         uses: actions/upload-artifact@v4
         with:
-          name: Nexsa-AI-Android
+          name: Nexsa-AI-Android-v16
           path: |
             nexsa-build/app/build/outputs/bundle/release/*.aab
             nexsa-build/app/build/outputs/apk/release/*.apk
