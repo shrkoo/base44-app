@@ -7,6 +7,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      NEXSA_STORE_PASSWORD: ${{ secrets.NEXSA_STORE_PASSWORD }}
+      NEXSA_KEY_PASSWORD: ${{ secrets.NEXSA_KEY_PASSWORD }}
+      NEXSA_KEYSTORE_BASE64: ${{ secrets.NEXSA_KEYSTORE_BASE64 }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,42 +26,84 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install Android SDK
+        shell: bash
         run: |
+          set -e
+
           yes | sdkmanager --licenses || true
+
           sdkmanager \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0"
 
       - name: Install Gradle 8.9
-        run: |
-          curl -fL \
-            https://services.gradle.org/distributions/gradle-8.9-bin.zip \
-            -o gradle.zip
-          unzip -q gradle.zip
-          echo "$PWD/gradle-8.9/bin" >> "$GITHUB_PATH"
-
-      - name: Restore permanent signing key
-        env:
-          NEXSA_KEYSTORE_BASE64: ${{ secrets.NEXSA_KEYSTORE_BASE64 }}
+        shell: bash
         run: |
           set -e
 
-          test -n "$NEXSA_KEYSTORE_BASE64"
+          curl -fL \
+            https://services.gradle.org/distributions/gradle-8.9-bin.zip \
+            -o gradle.zip
+
+          unzip -q gradle.zip
+
+          echo "$PWD/gradle-8.9/bin" >> "$GITHUB_PATH"
+
+      - name: Check signing secrets
+        shell: bash
+        run: |
+          set -e
+
+          if [ -z "$NEXSA_STORE_PASSWORD" ]; then
+            echo "ERROR: NEXSA_STORE_PASSWORD is missing."
+            exit 1
+          fi
+
+          if [ -z "$NEXSA_KEY_PASSWORD" ]; then
+            echo "ERROR: NEXSA_KEY_PASSWORD is missing."
+            exit 1
+          fi
+
+          if [ -z "$NEXSA_KEYSTORE_BASE64" ]; then
+            echo "ERROR: NEXSA_KEYSTORE_BASE64 is missing."
+            exit 1
+          fi
+
+          echo "All Nexsa signing secrets are available."
+
+      - name: Restore permanent signing key
+        shell: bash
+        run: |
+          set -e
 
           mkdir -p nexsa-build
 
           printf '%s' "$NEXSA_KEYSTORE_BASE64" \
             | base64 --decode > nexsa-build/nexsa-release.jks
 
-          test -s nexsa-build/nexsa-release.jks
+          if [ ! -s nexsa-build/nexsa-release.jks ]; then
+            echo "ERROR: Keystore file is empty."
+            exit 1
+          fi
 
-          echo "Permanent keystore restored."
+          echo "Permanent Nexsa keystore restored."
+
+      - name: Verify permanent signing key
+        shell: bash
+        working-directory: nexsa-build
+        run: |
+          set -e
+
+          keytool -list \
+            -keystore nexsa-release.jks \
+            -storepass "$NEXSA_STORE_PASSWORD" \
+            -alias nexsa
+
+          echo "Permanent signing key verified."
 
       - name: Create Nexsa Android project
-        env:
-          NEXSA_STORE_PASSWORD: ${{ secrets.NEXSA_STORE_PASSWORD }}
-          NEXSA_KEY_PASSWORD: ${{ secrets.NEXSA_KEY_PASSWORD }}
+        shell: bash
         run: |
           set -e
 
@@ -74,6 +121,7 @@ jobs:
 
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+
               repositories {
                   google()
                   mavenCentral()
@@ -101,23 +149,16 @@ jobs:
               id 'com.android.application'
           }
 
-          def storePassword = System.getenv("NEXSA_STORE_PASSWORD")
-          def keyPassword = System.getenv("NEXSA_KEY_PASSWORD")
-
-          if (!storePassword || !keyPassword) {
-              throw new GradleException(
-                  "Nexsa signing secrets are missing."
-              )
-          }
-
           android {
               namespace 'ai.nexsa.app'
+
               compileSdk 35
 
               defaultConfig {
                   applicationId 'ai.nexsa.app'
                   minSdk 23
                   targetSdk 35
+
                   versionCode 18
                   versionName '1.0.18'
               }
@@ -125,9 +166,9 @@ jobs:
               signingConfigs {
                   release {
                       storeFile file("../nexsa-release.jks")
-                      storePassword storePassword
+                      storePassword System.getenv("NEXSA_STORE_PASSWORD")
                       keyAlias "nexsa"
-                      keyPassword keyPassword
+                      keyPassword System.getenv("NEXSA_KEY_PASSWORD")
                   }
               }
 
@@ -138,6 +179,10 @@ jobs:
                       signingConfig signingConfigs.release
                   }
               }
+          }
+
+          dependencies {
+              implementation 'androidx.activity:activity:1.9.3'
           }
           EOF
 
@@ -207,6 +252,7 @@ jobs:
                   webView = new WebView(this);
 
                   WebSettings settings = webView.getSettings();
+
                   settings.setJavaScriptEnabled(true);
                   settings.setDomStorageEnabled(true);
                   settings.setAllowFileAccess(true);
@@ -232,70 +278,91 @@ jobs:
           }
           EOF
 
-      - name: Verify permanent signing key
+      - name: Validate Gradle configuration
         working-directory: nexsa-build
-        env:
-          NEXSA_STORE_PASSWORD: ${{ secrets.NEXSA_STORE_PASSWORD }}
+        shell: bash
         run: |
           set -e
 
-          keytool -list \
-            -keystore nexsa-release.jks \
-            -storepass "$NEXSA_STORE_PASSWORD" \
-            -alias nexsa
+          gradle \
+            :app:tasks \
+            --no-daemon
 
-          echo "Signing key verified."
+          echo "Gradle configuration is valid."
 
       - name: Build signed APK
         working-directory: nexsa-build
+        shell: bash
         run: |
           set -e
-          gradle assembleRelease --no-daemon
+
+          gradle \
+            assembleRelease \
+            --no-daemon
 
       - name: Build signed AAB
         working-directory: nexsa-build
+        shell: bash
         run: |
           set -e
-          gradle bundleRelease --no-daemon
 
-      - name: Find apksigner
+          gradle \
+            bundleRelease \
+            --no-daemon
+
+      - name: Locate apksigner
+        shell: bash
         run: |
           set -e
 
           APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
 
           if [ ! -x "$APKSIGNER" ]; then
-            echo "apksigner not found."
+            echo "apksigner was not found at:"
+            echo "$APKSIGNER"
+
+            echo "Searching Android SDK..."
+
             find "$ANDROID_HOME/build-tools" \
-              -name apksigner \
               -type f \
+              -name "apksigner" \
               -print
+
             exit 1
           fi
 
           echo "APKSIGNER=$APKSIGNER" >> "$GITHUB_ENV"
 
+          echo "apksigner found successfully."
+
       - name: Verify APK signature
         working-directory: nexsa-build
+        shell: bash
         run: |
           set -e
 
-          "$APKSIGNER" verify --verbose \
+          "$APKSIGNER" verify \
+            --verbose \
             app/build/outputs/apk/release/app-release.apk
 
-          echo "APK signature OK."
+          echo "APK signature verification successful."
 
       - name: Verify AAB signature
         working-directory: nexsa-build
+        shell: bash
         run: |
           set -e
 
-          jarsigner -verify -verbose -certs \
+          jarsigner \
+            -verify \
+            -verbose \
+            -certs \
             app/build/outputs/bundle/release/app-release.aab
 
-          echo "AAB signature OK."
+          echo "AAB signature verification successful."
 
       - name: Prepare release files
+        shell: bash
         run: |
           set -e
 
@@ -310,6 +377,7 @@ jobs:
             nexsa-build/app/build/outputs/bundle/release/app-release.aab \
             outputs/Nexsa-AI-v18.aab
 
+          echo "Release files:"
           ls -lh outputs/
 
       - name: Upload APK and AAB
