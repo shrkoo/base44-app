@@ -20,28 +20,219 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Download Gradle 8.9
+      - name: Install Android SDK
         run: |
-          curl -fL https://services.gradle.org/distributions/gradle-8.9-bin.zip -o gradle.zip
+          yes | sdkmanager --licenses || true
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+      - name: Install Gradle 8.9
+        run: |
+          curl -L \
+            https://services.gradle.org/distributions/gradle-8.9-bin.zip \
+            -o gradle.zip
+
           unzip -q gradle.zip
+
           echo "$PWD/gradle-8.9/bin" >> "$GITHUB_PATH"
 
-      - name: Check Gradle
+      - name: Create Android project
         run: |
-          gradle --version
-          java -version
+          rm -rf nexsa-build
+
+          mkdir -p nexsa-build/app/src/main/java/ai/nexsa/app
+          mkdir -p nexsa-build/app/src/main/res/values
+
+          cat > nexsa-build/settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.name = "NexsaAI"
+          include(":app")
+          EOF
+
+          cat > nexsa-build/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.7.3' apply false
+          }
+          EOF
+
+          cat > nexsa-build/gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          EOF
+
+          cat > nexsa-build/app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace 'ai.nexsa.app'
+              compileSdk 35
+
+              defaultConfig {
+                  applicationId 'ai.nexsa.app'
+                  minSdk 23
+                  targetSdk 35
+                  versionCode 1
+                  versionName '1.0.0'
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+          }
+
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.7.0'
+          }
+          EOF
+
+          cat > nexsa-build/app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.INTERNET" />
+
+              <application
+                  android:allowBackup="true"
+                  android:label="Nexsa AI"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.Nexsa">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+
+                  </activity>
+
+              </application>
+
+          </manifest>
+          EOF
+
+          cat > nexsa-build/app/src/main/res/values/styles.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+
+              <style
+                  name="Theme.Nexsa"
+                  parent="android:style/Theme.Material.Light.NoActionBar">
+
+                  <item name="android:fontFamily">sans</item>
+                  <item name="android:colorAccent">#14B8A6</item>
+                  <item name="android:navigationBarColor">#000000</item>
+                  <item name="android:statusBarColor">#000000</item>
+
+              </style>
+
+          </resources>
+          EOF
+
+          cat > nexsa-build/app/src/main/java/ai/nexsa/app/MainActivity.java <<'EOF'
+          package ai.nexsa.app;
+
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+
+          public class MainActivity extends Activity {
+
+              private WebView webView;
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+
+                  webView = new WebView(this);
+
+                  WebSettings settings = webView.getSettings();
+
+                  settings.setJavaScriptEnabled(true);
+                  settings.setDomStorageEnabled(true);
+                  settings.setAllowFileAccess(true);
+                  settings.setAllowContentAccess(true);
+
+                  webView.setWebViewClient(new WebViewClient());
+
+                  webView.loadUrl(
+                      "https://portable-smart-ally-ai.base44.app"
+                  );
+
+                  setContentView(webView);
+              }
+
+              @Override
+              public void onBackPressed() {
+                  if (webView.canGoBack()) {
+                      webView.goBack();
+                  } else {
+                      super.onBackPressed();
+                  }
+              }
+          }
+          EOF
+
+      - name: Verify project
+        working-directory: nexsa-build
+        run: |
+          echo "Checking Android project..."
+          test -f settings.gradle
+          test -f build.gradle
+          test -f app/build.gradle
+          test -f app/src/main/AndroidManifest.xml
+          test -f app/src/main/java/ai/nexsa/app/MainActivity.java
+          test -f app/src/main/res/values/styles.xml
+          echo "Project structure OK"
 
       - name: Build AAB
+        working-directory: nexsa-build
         run: |
           gradle bundleRelease --no-daemon
 
-      - name: Find AAB
+      - name: Build APK
+        working-directory: nexsa-build
         run: |
-          find . -type f -name "*.aab" -print
+          gradle assembleRelease --no-daemon
 
-      - name: Upload AAB
+      - name: Show outputs
+        run: |
+          echo "=== AAB ==="
+          find nexsa-build/app/build/outputs/bundle -type f -name "*.aab" -print
+
+          echo "=== APK ==="
+          find nexsa-build/app/build/outputs/apk -type f -name "*.apk" -print
+
+      - name: Upload APK and AAB
         uses: actions/upload-artifact@v4
         with:
-          name: Nexsa-AI-AAB
-          path: "**/*.aab"
+          name: Nexsa-AI-Android
+          path: |
+            nexsa-build/app/build/outputs/bundle/release/*.aab
+            nexsa-build/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
