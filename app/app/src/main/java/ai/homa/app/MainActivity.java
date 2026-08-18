@@ -13,31 +13,7 @@ public class MainActivity extends Activity {
 
         WebView webView = new WebView(this);
 
-        webView.setWebViewClient(new WebViewClient() {
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                super.onPageFinished(view, url);
-
-                String js =
-                    "(function() {" +
-                    "  function hideBase44() {" +
-                    "    var elements = document.querySelectorAll('*');" +
-                    "    for (var i = 0; i < elements.length; i++) {" +
-                    "      var el = elements[i];" +
-                    "      var text = (el.innerText || '').trim();" +
-                    "      if (text === 'Edit with Base44' || text === 'Edit with\\nBase44') {" +
-                    "        el.style.display = 'none';" +
-                    "      }" +
-                    "    }" +
-                    "  }" +
-                    "  hideBase44();" +
-                    "  var observer = new MutationObserver(hideBase44);" +
-                    "  observer.observe(document.documentElement, {childList:true, subtree:true});" +
-                    "})();";
-
-                view.evaluateJavascript(js, null);
-            }
-        });
+        webView.setWebViewClient(new WebViewClient());
 
         webView.getSettings().setJavaScriptEnabled(true);
         webView.getSettings().setDomStorageEnabled(true);
