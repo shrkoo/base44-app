@@ -6,6 +6,8 @@
     <application
         android:theme="@style/AppTheme"
         android:label="Homa AI"
+        android:icon="@drawable/icon_final_1_1"
+        android:roundIcon="@drawable/icon_final_1_1"
         android:usesCleartextTraffic="false">
 
         <activity
